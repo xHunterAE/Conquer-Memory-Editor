@@ -1,8 +1,6 @@
 # Conquer-Memory-Editor
 Advanced Cheat Engine Lua-based memory automation for Conquer 3.0 . Includes auto pathing, pickup, and GUI forms.
- # Conquer Memory Bot Trainer
 
-**A Lua Cheat Engine-based automation system for Conquer Online.**
 
 ## Features
 - Memory scanning and code injection using Cheat Engine Lua.
