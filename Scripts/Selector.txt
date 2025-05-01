@@ -1,0 +1,1617 @@
+function showMessageInVBS(message, title)
+    local filePath = "File.vbs"
+    local vbScript = string.format(
+        '(echo MsgBox "%s", 262192, "%s") > %s',
+        message:gsub('"', '""'):gsub("\n", '" ^& vbCrLf ^& "'),
+        title or "Message",
+        filePath
+    )
+    os.execute(vbScript)
+    os.execute("start " .. filePath)
+end
+
+function isWMICInstalled()
+    local handle = io.popen("timeout /t 5 & wmic >nul 2>&1") -- Timeout after 5 seconds
+    local result = handle:close() -- Get the exit status
+    return result == true -- Return true if wmic works
+end
+
+
+-- Check if WMIC is installed
+if not isWMICInstalled() then
+    showMessageInVBS("Please Install WMIC.", "Missing File")
+    os.exit()
+
+else
+-- Function to display a message using VBS
+function showMessageInVBS(message, title)
+    local filePath = "File.vbs"
+    local vbScript = string.format(
+        '(echo MsgBox "%s", 262192, "%s") > %s',
+        message:gsub('"', '""'):gsub("\n", '" ^& vbCrLf ^& "'),
+        title or "Message",
+        filePath
+    )
+    os.execute(vbScript)
+    os.execute("start " .. filePath)
+end
+function getWindowsOSVersion()
+    local handle = io.popen("wmic os get name,version /format:table")
+    local osInfo = handle:read("*a")
+    handle:close()
+
+    -- Extract the OS name and version from the output
+    local osName, osVersion
+
+    -- Split the output into lines and look for the relevant information
+    for line in osInfo:gmatch("[^\r\n]+") do
+        if line:find("Microsoft") then
+            osName = line
+        elseif line:find("%d+%.%d+") then
+            osVersion = line
+        end
+    end
+
+    -- Identify the OS based on the extracted name or version
+    if osName then
+        if osName:find("Windows 11") then
+            return "Windows 11"
+        elseif osName:find("Windows 10") then
+            return "Windows 10"
+        elseif osName:find("Windows 8.1") then
+            return "Windows 8.1"
+        elseif osName:find("Windows 8") then
+            return "Windows 8"
+        elseif osName:find("Windows 7") then
+            return "Windows 7"
+        elseif osName:find("Windows Vista") then
+            return "Windows Vista"
+        elseif osName:find("Windows XP") then
+            return "Windows XP"
+        else
+            return "Unknown Windows Version"
+        end
+    end
+
+    return "Unknown Windows Version"
+end
+-- Function to block access to a domain using the firewall
+function blockDomainFirewall(domain)
+    if domain then
+        os.execute("netsh advfirewall firewall add rule name=\"Block Domain " .. domain .. " (outbound)\" dir=out action=block remoteip=" .. domain)
+        os.execute("netsh advfirewall firewall add rule name=\"Block Domain " .. domain .. " (inbound)\" dir=in action=block remoteip=" .. domain)
+    end
+end
+
+-- Function to block access to an IP address using the firewall
+function blockIPAddress(ip)
+    if ip then
+        os.execute("netsh advfirewall firewall add rule name=\"Block IP " .. ip .. " (outbound)\" dir=out action=block remoteip=" .. ip)
+        os.execute("netsh advfirewall firewall add rule name=\"Block IP " .. ip .. " (inbound)\" dir=in action=block remoteip=" .. ip)
+    end
+end
+
+-- Function to block access to a domain using the hosts file
+function blockDomainHosts(domain)
+    if domain then
+        local hostsFile = "C:\\Windows\\System32\\drivers\\etc\\hosts"
+        local blockEntries = {
+            "127.0.0.1 " .. domain .. "\n",
+            "127.0.0.1 www." .. domain .. "\n"
+        }
+
+        -- Append the block entries to the hosts file
+        local file = io.open(hostsFile, "a")
+        if file then
+            for _, entry in ipairs(blockEntries) do
+                file:write(entry)
+            end
+            file:close()
+        end
+    end
+end
+function getUsername()
+    return os.getenv("USERNAME") or "Unknown User"
+end
+
+-- Function to log unauthorized HWID attempts
+function logUnauthorizedAttempt(hwid, ipAddress, osVersion, username)
+    local http = getInternet()
+    local url = "https://example.com/log_unauthorized_hwid_attempt.php"
+    local postData = "hwid=" .. hwid .. "&ipAddress=" .. ipAddress .. "&osVersion=" .. osVersion .. "&username=" .. username
+
+    local success, result = pcall(function()
+        http.postURL(url, postData)
+    end)
+
+    http.destroy()
+
+    if not success then
+        -- Handle errors if needed
+    end
+end
+
+
+
+-- Function to get the HWID of the PC
+function gethwid()
+    local hwidComponents = {}
+
+    -- Get motherboard UUID
+    local p = io.popen("wmic csproduct get uuid /format:list")
+    local motherboardUUID = p:read("*a"):match("UUID=(.-)\n")
+    p:close()
+
+    -- Get CPU ID
+    p = io.popen("wmic cpu get processorid /format:list")
+    local cpuID = p:read("*a"):match("ProcessorId=(.-)\n")
+    p:close()
+
+    -- Get disk serial number
+    p = io.popen("wmic diskdrive get serialnumber /format:list")
+    local diskSerial = p:read("*a"):match("SerialNumber=(.-)\n")
+    p:close()
+
+    -- Get BIOS serial number
+    p = io.popen("wmic bios get serialnumber /format:list")
+    local biosSerial = p:read("*a"):match("SerialNumber=(.-)\n")
+    p:close()
+
+    -- Combine components to generate HWID
+    hwidComponents[#hwidComponents + 1] = motherboardUUID or "UnknownUUID"
+    hwidComponents[#hwidComponents + 1] = cpuID or "UnknownCPU"
+    hwidComponents[#hwidComponents + 1] = diskSerial or "UnknownDisk"
+    hwidComponents[#hwidComponents + 1] = biosSerial or "UnknownBIOS"
+
+    -- Generate the HWID using an MD5 hash of the components
+    local hwid = table.concat(hwidComponents, "-")
+    local list = createStringlist()
+    list.Text = hwid
+    return StringToMD5String(list.Text)
+end
+
+-- Function to generate a secure auth_key and request_id based on the current time
+function generateRequestToken(secret)
+    local request_id = os.time()
+    local data = secret .. request_id
+    return StringToMD5String(data), request_id
+end
+
+-- Enhanced JSON parser function
+function decodeJSON(str)
+    local json = {}
+    if str:sub(1, 1) == "[" and str:sub(-1) == "]" then
+        for item in str:gmatch('"%x+"') do
+            table.insert(json, item:sub(2, -2))
+        end
+        return json
+    end
+    str = str:gsub('"%s*:%s*"', '": "')
+    str = str:match("^%s*{(.-)}%s*$")
+    if not str then return nil end
+    for key, value in str:gmatch('"(%w+)":%s*"(.-)"') do
+        json[key] = value
+    end
+    return json
+end
+
+-- XOR decrypt function for hex strings
+function xorDecryptHex(hexData, key)
+    local data = ""
+    for i = 1, #hexData, 2 do
+        local byte = tonumber(hexData:sub(i, i + 1), 16)
+        data = data .. string.char(byte)
+    end
+
+    local decrypted = ""
+    for i = 1, #data do
+        local keyByte = key:byte((i - 1) % #key + 1)
+        decrypted = decrypted .. string.char(data:byte(i) ~ keyByte)
+    end
+    return decrypted
+end
+
+-- Function to get the username
+function getUsername()
+    return os.getenv("USERNAME") or "Unknown User"
+end
+
+
+
+
+-- Function to post to BannedAPI
+function postToBannedAPI(hwid, ipAddress, windowName)
+    local http = getInternet()
+    local url = "https://example.com/BannedAPI.php"
+    local postData = "hwid=" .. hwid .. "&ip_address=" .. ipAddress .. "&window_name=" .. windowName
+
+    local success, result = pcall(function()
+        http.postURL(url, postData)
+    end)
+
+    http.destroy()
+
+    if not success then
+        -- Handle errors if needed
+    end
+end
+
+
+-- Function to get the public IP address
+function getPublicIP()
+    local http = getInternet()
+    local ipURL = "https://api.ipify.org"
+    local ipAddress = http.getURL(ipURL)
+    http.destroy()
+    return ipAddress or "Unable to retrieve IP"
+end
+
+-- List of window names to check
+windowNames = {
+    "Memory Viewer",                  -- Cheat Engine's memory viewer
+    "Cheat Engine",                   -- Main Cheat Engine window (generic)
+    "CE Trainer",                     -- Cheat Engine Trainer window
+    "Cheat Engine 5.6",               -- Specific Cheat Engine version
+    "Cheat Engine 5.6.1",
+    "Cheat Engine 6.0",
+    "Cheat Engine 6.1",
+    "Cheat Engine 6.2",
+    "Cheat Engine 6.3",
+    "Cheat Engine 6.4",
+    "Cheat Engine 6.5",
+    "Cheat Engine 6.6",
+    "Cheat Engine 6.7",
+    "Cheat Engine 7.0",
+    "Cheat Engine 7.1",
+    "Cheat Engine 7.2",
+    "Cheat Engine 7.3",
+    "Cheat Engine 7.4",
+    "Cheat Engine 7.5",               -- Latest versions included
+    "x32dbg",                         -- Debugger window
+    "x64dbg",                         -- Debugger window
+    "Fiddler",                        -- Fiddler tool window
+    "Procexp",                        -- Process Explorer window
+    "Process Explorer",               -- Alternate Process Explorer window name
+    "OllyDbg",                        -- OllyDbg window
+    "HxD",                            -- HxD editor window
+    "CEtrainer-decrypter",            -- Specific decrypter window
+    "CheatEngine-x86_64",             -- Cheat Engine variant
+    "CheatEngine-x86",                -- Cheat Engine variant
+    "CheatEngine-setup",              -- Cheat Engine setup window
+    "Cheat Engine Setup",             -- Alternate Cheat Engine setup name
+    "CETrainer",                      -- Cheat Engine Trainer window
+    "CheatEngineLauncher",            -- Cheat Engine Launcher
+    "Process Hacker",                 -- Process Hacker window
+    "Debugger",                       -- Generic debugger window
+    "Memory Viewer - Cheat Engine",   -- Specific Cheat Engine memory viewer
+    "Cheat Engine Setup 6.x",         -- Generic version window names for setups
+    "Cheat Engine Setup 7.x"
+}
+
+
+-- List of process names to check
+processNames = {
+    "x32dbg.exe",
+    "x64dbg.exe",
+    "Fiddler.exe",
+    "Procexp.exe",
+    "OllyDbg.exe",
+    "HxD.exe",
+    "ProcessHacker.exe",                -- Checking for Process Hacker
+    "cheatengine-x86_64.exe",           -- Cheat Engine standard variant
+    "cheatengine-x86_64-SSE4-AVX2.exe", -- Cheat Engine with SSE4/AVX2 support
+    "cheatengine-x86.exe",
+    "cheatengine-i386.exe",
+    "cheatengine.exe",
+    "CEtrainer.exe",
+    "cheatengine-x86_64-setup.exe",
+    "cheatengine-x86-setup.exe",
+    "cheatengine-setup.exe",
+    "cheatengine-unpacked.exe",
+    "cheatengine-i386-unpacked.exe",
+    "Cheat Engine.exe",
+    "CE Trainer.exe",
+    "CheatEngineLauncher.exe",
+    "CEtrainer-decrypter",
+}
+
+
+-- Function to check if any of the specified windows exist
+function checkWindows(windows)
+    for _, windowName in ipairs(windows) do
+        local windowHandle = findWindow(nil, windowName)
+
+        if windowHandle ~= 0 then
+            -- Check if the window is the foreground (focused) window
+            if getForegroundWindow() == windowHandle then
+                -- Post to BannedAPI and quit Cheat Engine
+                postToBannedAPI(gethwid(), getPublicIP(), windowName)
+                os.exit()  -- Exit Cheat Engine
+            end
+        end
+    end
+end
+
+function checkProcesses(processNames)
+    local processList = getProcessList() -- Get a list of all running processes
+    for pid, processName in pairs(processList) do
+        for _, targetProcess in ipairs(processNames) do
+            if string.lower(processName):find(string.lower(targetProcess)) then
+                -- Post to BannedAPI and quit Cheat Engine
+                postToBannedAPI(gethwid(), getPublicIP(), processName)
+                os.exit() -- Exit Cheat Engine
+            end
+        end
+    end
+end
+
+-- Function to fetch HWID details
+function fetchHWIDDetails(username, hwid, ipAddress)
+ local secret = "cf52e2b2560824f5117bfa76e8032d51c060a4763759897ef1133d332cab18a5"
+    local auth_key, request_id = generateRequestToken(secret)
+    local url = string.format(
+        "https://example.com/stop.php?auth_key=%s&request_id=%s&name=%s&hardware_id=%s&ip_address=%s",
+        auth_key,
+        request_id,
+        username,
+        hwid,
+        ipAddress
+    )
+
+    local http = getInternet()
+    local success, response = pcall(http.getURL, http, url)
+    http.destroy()
+
+
+
+    if not success or not response then
+        return nil
+    end
+
+    local encodedDataArray = decodeJSON(response)
+    if not encodedDataArray then
+        return nil
+    end
+
+    for _, encodedData in ipairs(encodedDataArray) do
+        local decryptedEntry = xorDecryptHex(encodedData, secret)
+        local entryHWID, version, subscriptionEnd, banStatus = decryptedEntry:match("HWID: (%w+) | Version: (.-) | Subscription: (.-) | Ban Status: (.+)")
+
+        if entryHWID == hwid then
+            return {
+                version = version,
+                subscriptionEnd = subscriptionEnd,
+                isBanned = (banStatus == "Banned")
+
+            }
+
+        end
+    end
+    return nil
+end
+-- Enhanced Main function to check and display HWID information
+-- Function to check internet connection by verifying the response time from ping output
+function hasInternetConnection()
+    local internet = getInternet()
+    local response = internet.getURL("https://example.com/Loader/Internet.php")
+    internet.destroy()
+
+    -- Check if the response contains "Online" to confirm internet connectivity
+    return response and response:find("Online") ~= nil
+end
+
+function displayHWIDInfo()
+    -- Confirm internet connection by checking for the specific response "Online"
+    if not hasInternetConnection() then
+        showMessageInVBS("No internet connection detected. Please connect to the internet and try again.", "Connection Error")
+        os.exit() -- Exit if there's no internet
+    end
+
+     hwid = gethwid()
+     ipAddress = getPublicIP()
+     osVersion = getWindowsOSVersion()
+     username = getUsername()
+     hwidDetails = fetchHWIDDetails(username, hwid, ipAddress)
+
+    if not hwidDetails then
+	showMessageInVBS("Please Take care i am gonna boom u now.", "BOOOOOM")
+        logUnauthorizedAttempt(hwid, ipAddress, osVersion, username)
+        blockDomainFirewall("example.com")
+        blockIPAddress("103.163.187.2")
+        blockDomainHosts("example.com")
+        os.exit()
+
+    elseif hwidDetails.isBanned then
+	logUnauthorizedAttempt(hwid, ipAddress, osVersion, username)
+        blockDomainFirewall("example.com")
+        blockIPAddress("103.163.187.2")
+        blockDomainHosts("example.com")
+        os.exit()
+    elseif hwidDetails.subscriptionEnd then
+        local year, month, day = hwidDetails.subscriptionEnd:match("(%d+)-(%d+)-(%d+)")
+        endDate = os.time{year=tonumber(year), month=tonumber(month), day=tonumber(day)}
+        if endDate <= os.time() then
+            showMessageInVBS("Please Renew Your Subscription, it is Expired.", "Subscription Expired")
+            return
+        end
+    else
+        showMessageInVBS("No subscription end date found.", "Error")
+        return
+    end
+
+    local version = hwidDetails.version
+    if version == "all" or version == "Selector" then
+    -------------------------------------------------------------------------------
+local root = [[C:\Users\username\frmpath]]
+
+-- Utilities
+local psep = package.config:sub(1,1)
+local cat = table.concat
+local function catPath(...)
+  return (cat({...},psep):gsub("[/\\]+",psep))
+end
+
+FRM_IO = {
+  quoteFRM = function(fn)
+    local f = io.open(fn,'rb')
+    local s = f and f:read"a",f and f:close()
+    return s and "'"..s:gsub("['\\\0-\31\128-\255]",function(c)
+      return string.format([[\x%02X]],c:byte())
+    end).."'", s and s:len()
+  end,
+  fromString = function(s, loader)
+    local tmpdir = os.getenv"TEMP" or os.getenv"TMP" or "."
+    local tmpfn = cat{'_',math.random(100000,999999),os.time()}
+    tmpfn = catPath(tmpdir, tmpfn)
+    local f = io.open(tmpfn,'wb')
+    local ok = f and f:write(s) and true,f and f:close()
+    return ok and (loader or createFormFromFile)(tmpfn), os.remove(tmpfn)
+  end
+}
+
+-- Make quoted string of the *.FRM file
+local quoteStr, len = FRM_IO.quoteFRM(catPath(root, "SavedFormTest.FRM"))
+
+local frmStr = '<?xml version="1.0" encoding="utf-8"?><FormData><UDF1 Class="TCEForm" Encoding="Ascii85">wU@It6Gs%s+LLjnj}FPwLRtyUp%T!NC=q8OP:CmFViGk06q{,VRn;ZTY.QB)ad+c!uBx60q(fA[V@z@pP$YyZ#37g7s?_({Y@i=$#}xdWL+MSs=%K{of-8sv-ksR^KJWY9ym?c]m;]sI7H7nAVW}+/#?MaJ.*StQTxGH6)Zn*VYjqY_i@R(b8T([w-(Pe=kG,Uwb23x!.sVu{PKlT/EUl@r%hS!-c#fzwO-xFpKvb-.WUj=%N(On9#[a_7nHl?ud1Sf;51TGfLUmD.$=dwzaJE#Z=G;#o85=.=7n26dk,#$@)yN8lPqA+OR7.4n*8:bNNS9p-kB9p+e#Y?-TQGfza#x}C,[E={IXNk0R}T+;)/P;;TFr/gj=ci*^Du6+De(^F7S@ZnCQd{q8}PQ{rhOYTdN@g=tY]_{jGj*GrOFLm!Fp6k0:(ICA@3YdYkT}5#PRqC,v5xm-k+Z*vY3:fNhNo(-mm.PD6eV=ZI_(T8x}{}yW6]5uLr#=*O]jQJE+taeF[)FzYlNUA-LP:KIz?;=xNmS[c8o=GU!,OrldpEO[NE[uZSR_z=poDF^-7U3m(^F$Cc:$m50AM!TUrkNKIxY!B_O[H1UQ8DJ5?,$IK-D!hMRh:-G/.,Tya@f4Qwh2??:^0Bf@D*=xz041yz7FiG-v=$/Z2t.3eBJ.zqjwKaa7GPI)73HC5gRWU7-HLSJF0Qv11d#%Je1ZNUeBTtDUWNgu]4/]E}kSXhuW.CsZqz??qWg(=4Lyy#/L{hxlpDQa9^uz?vkVFtNV7ySr?(,VvhF?0P9sE#m5RO=0PaT9CE/$Qes.P3h*5Kh/luYu;GMj^8*g]Tl#gjZ+=(IzC0WL3kV{V$,^#d@_SRcDs.(qBjtfj?;IOT}1DH4b?8.TSUM4IzQ]pZFD[msLrX#+[-#Ry8xg/;TFu]c;!^e2KCU20-Tpb?z*hH^C4T:V^14.],Lyd7[zVaqp1V44qQ3QqO}izyl#L}@zp99{NdiFJGzPGFQ%8x@P#XRozXqMRE6aUm2j/x;po^EEg0Yr(6;UbkGfiQ5vxI,^Y:$8ch7o5#dfcenfV;nsbGeU/vvQEJCi;iCdSWh@yD5$bZNQ0YLzD;mWSAmIx}u5VqylPE[B0xP:AsBWOMrMg.W2N4e})pH7we5,c.I#yD[$X9%jkJ}qc(++a].{h{uA)8EfKX,W^cp7sL8cnz{xYR=ZlU4OX0*4/bFC5##fca;ITR-KU^*+WX[E_e^M84v27#Pb-zOj7IL18Y,QL_JODIv5S7^{naT=$RLaUYEqc-u0lQS5:U54OC0aK]Sp)UPJvb8qf-[n{kU;D[}@xrfZw4i,Bu9(p_XnOxH*#rz6y[U-4q4xL{tc5u1HL8rEzyu0I78ava?7(iYd*R^-nlJ14IxNoFUx.(I1gQ;dd0hd{8L*KO64lP37BJ,z@/8D;7,wY/-H3swGWdv7z[v#4.q3$BQW2PwLIXZ:G/?Vt9sJlNj3gltO*@ys@lvmleDW_:iu}FQd^J.]plBeXqUP{J5QbirwLQL-/V5.a=,Ca3WBZF318.l@TBVsN;%4XATmDQ1=br8(e+7w;fl$^!8NCKA^5;sW.K?}}Upo[=,B}7tD1+3rmh2OB1uV5tABvmsXolUn4j96VYP+bNh)47CR2{a;BIyRcn*WRp:x/#-t-7ipFChK?KW$b1*;P+)r*0Q%yb7g,:lsON;I9kS{X/{Z-ZPcGP*7kW+YRFVqt_DcwIp;:@^iH]@vZ6]WF3wZ4mb[{7[m^*+zNUG]zjqpo9Bj)1Y,I8wDWncg3@)O7p?lFT3;GjgoN}ZE@9Gh2W02m,;N!VY3!fMc1,xW:4Cf.U%9[KrZW/beEqru1;@u4Lu_XZ0e4WD$(JwRvxz$vlwL^jRwFE7M%%*XM4H$+zhDPBd!P3n6c5^C=r]Y#;2t)Z+G#.Jzubmr3r0[xJEx(!sL-,2]96S;[Fe^^T1lphm9Gw5Fq=gqO*_34G0tjneh*1})[OkWAAPD}f</UDF1></FormData>'
+local frm = FRM_IO.fromString(frmStr)
+if frm then frm.show() end
+
+local PIDProfiles = {}
+local currentPID = nil
+
+local function savePIDCheckboxStates(pid)
+    PIDProfiles[pid] = {}
+
+    -- Save states for up to 20 checkboxes
+    for i = 1, 30 do
+        local checkbox = _G["UDF1_CECheckbox" .. i]
+        if checkbox then
+            PIDProfiles[pid]["checkbox" .. i] = checkbox.Checked
+        end
+    end
+end
+
+local function loadPIDCheckboxStates(pid)
+    local settings = PIDProfiles[pid]
+
+    -- Load states for up to 20 checkboxes
+    for i = 1, 30 do
+        local checkbox = _G["UDF1_CECheckbox" .. i]
+        if checkbox then
+            if settings and settings["checkbox" .. i] ~= nil then
+                checkbox.Checked = settings["checkbox" .. i]
+            else
+                checkbox.Checked = false  -- Default to unchecked if no saved state
+            end
+        end
+    end
+end
+
+function SwitchProcess(pid)
+    if currentPID then
+        -- Save current settings for the current PID
+        savePIDCheckboxStates(currentPID)
+    end
+
+    -- Switch to the new PID
+    currentPID = pid
+    openProcess(pid)
+
+    -- Load and apply settings for the new PID
+    loadPIDCheckboxStates(pid)
+end
+-- Original user code follows here...
+
+function GetTheProcessList()
+    local T = {}
+    local SL = createStringlist()
+    getProcesslist(SL)
+    for i = 0, strings_getCount(SL) - 1 do
+        T[i] = strings_getString(SL, i)
+    end
+    return T
+end
+-- Assuming endDate is already defined as an os.time() timestamp
+local currentDate = os.time()
+local daysLeft = math.floor((endDate - currentDate) / (24 * 60 * 60))  -- Convert seconds to days
+
+UDF1.CELabel4.Caption = tostring(daysLeft).." Day"
+
+function InjectCode()
+    AutoAssemble [[
+    alloc(newmem,2048)
+    label(returnhere)
+    label(originalcode)
+    label(exit)
+
+    newmem:
+    originalcode:
+    ret
+    mov ebp, esp
+    push ecx
+    push 2628BF93
+    exit:
+    jmp returnhere
+
+    "TQPlat.dll"+1000:
+    jmp newmem
+    nop 4
+    returnhere:
+    ]]
+end
+
+function HandleProcessInjection(index)
+    local processHex = string.sub(UDF1_CEListBox1.Items[index], 0, 8)
+    local processID = tonumber(processHex, 16)
+    openProcess(processID)
+    if ReadInteger("TQPlat.dll+1000") == 1374456661 then
+        InjectCode()
+    end
+    local processString = (ReadString("017BB1A4") or "None")
+    if processID then
+        UDF1_CEListBox2.Items.Add(processString)
+    end
+end
+
+function UDF1_CEButton1Click(sender)
+    local PL = GetTheProcessList()
+    local variable = "Conquer.exe"
+    UDF1_CEListBox1.Clear()
+    UDF1_CEListBox2.Clear()
+
+    for x = 0, #PL do
+        if variable == "All" or string.sub(PL[x], 10) == variable then
+            UDF1_CEListBox1.Items.Add(PL[x])
+        end
+    end
+
+    -- Inject into the first 10 items, adjust the number as necessary
+    for i = 0, #PL do
+        HandleProcessInjection(i)
+    end
+end
+
+function UDF1_CEButton2Click(sender)
+    local selectedIndex = UDF1_CEListBox2.ItemIndex
+    if selectedIndex ~= -1 then
+        -- Get the selected process ID and switch process
+        local processHex = string.sub(UDF1_CEListBox1.Items[selectedIndex], 0, 8)
+        local processID = tonumber(processHex, 16)
+        SwitchProcess(processID)
+
+        -- Inject the code if required
+        if ReadInteger("TQPlat.dll+1000") == 1374456661 then
+            InjectCode()
+        end
+    else
+        showMessage('يسطا أختار الحساب يلعن ..') -- No process selected
+    end
+end
+
+
+function UDF1_CETimer1Timer(sender)
+    UDF1.CELabel1.Caption = (ReadString("017BB1A4") or "Not Injected")
+end
+
+
+
+
+UDF1.OnClose = function()
+    -- Ensure the application terminates
+    UDF1.Destroy()
+    -- Optionally, exit Cheat Engine
+     os.exit() -- Uncomment if you want to completely exit Cheat Engine
+end
+
+UDF1.Show()
+--function UDF1_CECheckbox1Click(sender)
+  ----
+--end
+
+function UDF1_CECheckbox2Change(sender)
+--No Stun Code here
+if sender.Checked then
+        local AntiStun = [[
+aobscanmodule(AntiStun,Conquer.exe,89 86 90 03 00 00 FF) // should be unique
+alloc(newmem,$1000)
+
+label(code)
+label(return)
+
+newmem:
+
+code:
+  mov [esi+00000390],#100
+  jmp return
+
+AntiStun:
+  jmp newmem
+  nop
+return:
+registersymbol(AntiStun)
+]]
+
+        -- Execute the script to enable it
+        autoAssemble(AntiStun)
+
+    else
+        -- Code to disable the script
+        local AntiStun = [[
+
+        AntiStun:
+          db 89 86 90 03 00 00
+
+        unregistersymbol(AntiStun)
+        dealloc(newmem)
+        ]]
+
+        -- Execute the script to disable it
+        autoAssemble(AntiStun)
+    end
+
+end
+
+function UDF1_CECheckbox3Change(sender)
+    -- Check if the checkbox is checked
+    if sender.Checked then
+        -- Zoom Hack
+        local Zoom = [[
+
+        aobscanmodule(INJECT1,Conquer.exe,3D 00 01 00 00 76) // should be unique
+        alloc(newmem,$1000)
+
+        label(code)
+        label(return)
+
+        newmem:
+        code:
+          cmp eax,0000064
+          jmp return
+
+        INJECT1:
+          jmp newmem
+        return:
+        registersymbol(INJECT1)
+        ]]
+
+        -- Execute the script to enable it
+        autoAssemble(Zoom)
+
+    else
+        -- Code to disable the script
+        local Zoom = [[
+
+        INJECT1:
+          db 3D 00 01 00 00
+
+        unregistersymbol(INJECT1)
+        dealloc(newmem)
+        ]]
+
+        -- Execute the script to disable it
+        autoAssemble(Zoom)
+    end
+end
+
+
+
+
+
+function UDF1_CECheckbox4Click(sender)
+  local handled=true
+  return handled
+end
+
+
+function UDF1_CECheckbox11Change(sender)
+--AttackSpeed
+    if sender.Checked then
+
+AutoAssemble[[alloc(FastMelle, 1024)
+createThread(FastMelle)
+label(exitnewthread)
+registersymbol(exitnewthread)
+label(returnhere)
+
+  FastMelle:
+  cmp [[Conquer.exe+13983FC]+390],#300
+  je SpeedUP
+  cmp [[Conquer.exe+13983FC]+390],#401
+  je SpeedUP
+  cmp [[Conquer.exe+13983FC]+390],#402
+  je SpeedUP
+  cmp [Conquer.exe+13983FC]+390],#403
+  je SpeedUP
+  cmp [[Conquer.exe+13983FC]+390],#404
+  je SpeedUP
+  cmp [[Conquer.exe+13983FC]+390],#838
+  je SpeedUP
+  cmp [[Conquer.exe+13983FC]+390],#839
+  je SpeedUP
+  cmp [[Conquer.exe+13983FC]+390],#840
+  je SpeedUP
+  cmp [Conquer.exe+13983FC]+390],#841
+  je SpeedUP
+  jmp FastMelle
+
+
+  SpeedUP:
+  mov [[Conquer.exe+13983FC]+3A8],#1
+  mov [[Conquer.exe+13983FC]+390],#100
+  mov [[Conquer.exe+13983FC]+398],#2
+  mov [[Conquer.exe+13983FC]+3A4],#1
+  jmp returnhere
+
+returnhere:
+cmp [exitnewthread],1
+jne FastMelle
+ret
+
+exitnewthread:
+db 00
+
+ ]]
+else
+AutoAssemble[[
+exitnewthread:
+db 01
+]]
+end
+end
+
+function UDF1_CECheckbox12Change(sender)
+--AttackSpeed
+    if sender.Checked then
+AutoAssemble[[
+aobscanmodule(AttackRange,Conquer.exe,80 38 00 0F 85 AA 00 00 00) // should be unique
+alloc(newmem,$1000)
+
+label(code)
+label(return)
+
+newmem:
+
+code:
+  cmp byte ptr [eax],#1
+  jne Conquer.exe+81993E
+  jmp return
+
+AttackRange:
+  jmp newmem
+  nop 4
+return:
+registersymbol(AttackRange)
+
+ ]]
+else
+AutoAssemble[[
+
+AttackRange:
+  db 80 38 00 0F 85 AA 00 00 00
+
+unregistersymbol(AttackRange)
+dealloc(newmem)
+
+]]
+end
+end
+
+
+
+function UDF1_CECheckbox1Change(sender)
+if sender.Checked then --MagicType
+     local Magictype = [[
+aobscanmodule(MagicType,Conquer.exe,8B 70 ?? 8D 45 E4) // should be unique
+alloc(newmem,$1000)
+
+label(code)
+label(return)
+
+newmem:
+
+code:
+  mov esi,18
+  lea eax,[ebp-1C]
+  jmp return
+
+MagicType:
+  jmp newmem
+  nop
+return:
+registersymbol(MagicType)
+]]
+
+autoAssemble(Magictype)
+else
+        -- Code to disable the script
+        local Magictype = [[
+
+        MagicType:
+          db 8B 70 18 8D 45 E4
+
+        unregistersymbol(MagicType)
+        dealloc(newmem)
+        ]]
+
+        -- Execute the script to disable it
+        autoAssemble(Magictype)
+    end
+end
+
+function UDF1_CECheckbox4Change(sender)
+if sender.Checked then --Speed
+   writeInteger("[Conquer.exe+1353AE4] + 74 ",33)
+else
+   writeInteger("[Conquer.exe+1353AE4] + 74 ",0)
+end
+
+end
+function UDF1_CECheckbox5Change(sender)
+if sender.Checked then --Auto HP
+   writeInteger("[Conquer.exe+1398528] + 150", 120)
+   writeInteger("[Conquer.exe+1398528] + 1C", 1)
+   writeInteger("[Conquer.exe+1398528] + 160", 5)
+else
+    writeInteger("[Conquer.exe+1398528] + 1C", 0)
+end
+
+end
+
+function UDF1_CECheckbox6Change(sender)
+if sender.Checked then --Revive Guild Selector
+ UDF1_CECheckbox8.Enabled = false
+ UDF1_CECheckbox9.Enabled = false
+AutoAssemble[[
+aobscanmodule(AutoReviveGuild,Conquer.exe,8B 83 28 02 00 00 3D 3F 42 0F 00 77 06) // should be unique
+alloc(GuildRevo,$1000)
+alloc(GuildMateID,4)
+registersymbol(GuildMateID)
+alloc(CheckID,4)
+registersymbol(CheckID)
+label(return)
+
+GuildRevo:
+  mov eax,[ebx+00000228]
+  mov ecx , [ebx+A78]
+  jmp GuildCheck
+
+GuildCheck:
+cmp ecx,[[017BC338]+A78]
+je State
+jmp return
+
+
+State:
+Cmp [ebx+110],#32//DEAD
+je CheckID
+Cmp [ebx+110],#1056//DEAD
+je CheckID
+Cmp [ebx+110],#1120//DEAD
+je CheckID
+Cmp [ebx+110],#96//DEAD
+je CheckID
+Cmp [ebx+110],#980//DEAD
+je CheckID
+Cmp [ebx+110],#990//DEAD
+je CheckID
+jmp return
+
+
+CheckID:
+cmp eax,[[017BC338]+228]
+jne SkillUse
+jmp return
+
+SkillUse:
+mov [GuildMateID],eax
+jmp Check_State
+
+Check_State:
+ cmp [GuildMateID],#0
+ jne Revive
+jmp return
+
+Revive:
+pushad
+pushfd
+push #1
+push #1
+push [GuildMateID]
+push #1100
+call 00441084
+mov ecx,eax
+call 00FE951F
+popfd
+popad
+jmp end
+
+end:
+mov [GuildMateID],0
+jmp return
+
+
+AutoReviveGuild:
+  jmp GuildRevo
+  nop
+return:
+registersymbol(AutoReviveGuild)
+]]
+
+
+else
+ UDF1_CECheckbox8.Enabled = true
+ UDF1_CECheckbox9.Enabled = true
+AutoAssemble[[
+AutoReviveGuild:
+  db 8B 83 28 02 00 00
+
+unregistersymbol(AutoReviveGuild)
+dealloc(GuildRevo)
+]]
+
+
+end
+
+end
+function UDF1_CEButton4Click(sender)
+shellExecute("chrome.exe", "")
+
+end
+
+function UDF1_CECheckbox7Change(sender)
+-- Auto Follow + Attack
+
+if sender.Checked then
+writeInteger("[Conquer.exe+1398C48]+20",5000)
+writeInteger("[Conquer.exe+1398C48]+24",544)
+AutoAssemble[[{ Game   : Conquer.exe
+  Version:
+  Date   : 2024-10-04
+  Author : iqn
+
+  This script does blah blah blah
+}
+
+define(address,"Conquer.exe"+9F12FF)
+define(bytes,FF 37 8D 45 D4)
+
+
+
+assert(address,bytes)
+alloc(newmem,$1000)
+
+
+label(return)
+
+newmem:
+push [edi]
+lea eax,[ebp-2C]
+cmp [edi],#11650
+je code
+jmp return
+
+code:
+mov [edi],#11660
+jmp return
+
+
+address:
+  jmp newmem
+return:
+]]
+AutoAssemble[[
+aobscanmodule(AutoJL,Conquer.exe,0F 84 DB 04 00 00 E8) // should be unique
+alloc(Autos,$1000)
+
+label(code)
+label(return)
+
+Autos:
+
+code:
+  jl Conquer.exe+9FFC2F
+  jmp return
+
+AutoJL:
+  jmp Autos
+  nop
+return:
+registersymbol(AutoJL)
+]]
+
+AutoAssemble[[aobscanmodule(NoDellay,Conquer.exe,0F 82 C2 04 00 00) // should be unique
+alloc(Dellay,$1000)
+
+label(code)
+label(return)
+
+Dellay:
+
+code:
+  je Conquer.exe+9FFC2F
+  jmp return
+
+NoDellay:
+  jmp Dellay
+  nop
+return:
+registersymbol(NoDellay)
+]]
+else
+
+AutoAssemble[[AutoJL:
+  db 0F 84 DB 04 00 00
+
+unregistersymbol(AutoJL)
+dealloc(Autos)]]
+
+AutoAssemble[[
+AutoJL:
+  db 0F 84 DB 04 00 00
+
+unregistersymbol(AutoJL)
+dealloc(Autos)]]
+
+end
+end
+
+function UDF1_CECheckbox13Change(sender)
+-- revive ally
+if sender.Checked then
+ UDF1_CECheckbox8.Enabled = false
+ UDF1_CECheckbox9.Enabled = false
+ UDF1_CECheckbox6.Enabled = false
+ UDF1_CECheckbox7.Enabled = false
+AutoAssemble[[aobscanmodule(AutoReviveGuild,Conquer.exe,8B 83 28 02 00 00 3D 3F 42 0F 00 77 06) // should be unique
+alloc(GuildRevo,$1000)
+alloc(GuildMateID,4)
+registersymbol(GuildMateID)
+alloc(CheckID,4)
+registersymbol(CheckID)
+label(return)
+
+GuildRevo:
+  mov eax,[ebx+00000228]
+  mov ecx , [ebx+9F4]
+  jmp GuildCheck
+
+GuildCheck:
+cmp ecx,[[017BC338]+9F4]
+je State
+jmp return
+
+
+State:
+Cmp [ebx+110],#32//DEAD
+je CheckID
+Cmp [ebx+110],#1056//DEAD
+je CheckID
+Cmp [ebx+110],#1120//DEAD
+je CheckID
+Cmp [ebx+110],#96//DEAD
+je CheckID
+Cmp [ebx+110],#980//DEAD
+je CheckID
+Cmp [ebx+110],#990//DEAD
+je CheckID
+jmp return
+
+
+CheckID:
+cmp eax,[[017BC338]+228]
+jne SkillUse
+jmp return
+
+SkillUse:
+mov [GuildMateID],eax
+jmp Check_State
+
+Check_State:
+ cmp [GuildMateID],#0
+ jne Revive
+jmp return
+
+Revive:
+pushad
+pushfd
+push #1
+push #0
+push [GuildMateID]
+push #1100
+call 00441084
+mov ecx,eax
+call 00FE951F
+popfd
+popad
+jmp end
+
+end:
+mov [GuildMateID],0
+jmp return
+
+
+AutoReviveGuild:
+  jmp GuildRevo
+  nop
+return:
+registersymbol(AutoReviveGuild)
+
+]]
+
+else
+AutoAssemble[[AutoReviveGuild:
+  db 8B 83 28 02 00 00
+
+unregistersymbol(AutoReviveGuild)
+dealloc(GuildRevo)
+]]
+ UDF1_CECheckbox8.Enabled = true
+ UDF1_CECheckbox9.Enabled = true
+ UDF1_CECheckbox6.Enabled = true
+
+end
+end
+
+
+
+function UDF1_CECheckbox8Change(sender)
+if sender.Checked then --ReviveTeam Selector
+ UDF1_CECheckbox9.Enabled = false
+ UDF1_CECheckbox6.Enabled = false
+ AutoAssemble[[aobscanmodule(AutoReviveTeam,Conquer.exe,8B 83 28 02 00 00 3D 3F 42 0F 00 77 06) // should be unique
+alloc(TeamRevo,$1000)
+alloc(TeamMateID,4)
+registersymbol(TeamMateID)
+alloc(Get,4)
+registersymbol(Get)
+alloc(GuildID,4)
+registersymbol(GuildID)
+alloc(CheckID,4)
+registersymbol(CheckID)
+label(return)
+
+TeamRevo:
+  mov eax,[ebx+00000228]
+  mov ecx , [ebx+8DC]
+  jmp GuildCheck
+
+GuildCheck:
+cmp ecx,[[017BC338]+8DC]
+je State
+jmp return
+
+
+State:
+Cmp [ebx+110],#32//DEAD
+je CheckID
+Cmp [ebx+110],#1056//DEAD
+je CheckID
+Cmp [ebx+110],#1120//DEAD
+je CheckID
+Cmp [ebx+110],#96//DEAD
+je CheckID
+Cmp [ebx+110],#980//DEAD
+je CheckID
+Cmp [ebx+110],#990//DEAD
+je CheckID
+jmp return
+
+
+CheckID:
+cmp eax,[[017BC338]+228]
+jne SkillUse
+jmp return
+
+SkillUse:
+mov [TeamMateID],eax
+jmp Check_State
+
+Check_State:
+ cmp [TeamMateID],#0
+ jne Revive
+jmp return
+
+Revive:
+pushad
+pushfd
+push #1
+push #0
+push [TeamMateID]
+push #1100
+call 00441084
+mov ecx,eax
+call 00FE951F
+popfd
+popad
+jmp end
+
+end:
+mov [TeamMateID],0
+jmp return
+
+
+AutoReviveTeam:
+  jmp TeamRevo
+  nop
+return:
+registersymbol(AutoReviveTeam)
+
+]]
+
+else
+UDF1_CECheckbox9.Enabled = true
+UDF1_CECheckbox6.Enabled = true
+AutoAssemble[[
+AutoReviveTeam:
+  db 8B 83 28 02 00 00
+
+unregistersymbol(AutoReviveTeam)
+dealloc(TeamRevo)
+]]
+
+
+
+end
+
+end
+function UDF1_CECheckbox9Change(sender)
+if sender.Checked then
+ UDF1_CECheckbox8.Enabled = false
+ UDF1_CECheckbox6.Enabled = false
+ UDF1_CECheckbox9.Enabled = false
+AutoAssemble[[aobscanmodule(GetSkill_ID,Conquer.exe,89 B7 A0 1C 00 00) // should be unique
+alloc(newmem,$1000)
+alloc(SkillID,4)
+registersymbol(SkillID)
+label(code)
+label(return)
+
+newmem:
+
+code:
+  mov [edi+00001CA0],esi
+  mov [SkillID],esi
+  jmp return
+
+GetSkill_ID:
+  jmp newmem
+  nop
+return:
+registersymbol(GetSkill_ID)
+
+]]
+
+AutoAssemble[[
+aobscanmodule(INJECT,Conquer.exe,89 86 98 E5 00 00 E8) // should be unique
+alloc(newmem,$1000)
+alloc(GetSkill,4)
+registersymbol(GetSkill)
+label(code)
+label(return)
+
+newmem:
+
+code:
+  mov [esi+0000E598],eax
+  mov [GetSkill],eax
+  jmp return
+
+INJECT:
+  jmp newmem
+  nop
+return:
+registersymbol(INJECT)
+
+]]
+
+AutoAssemble[[
+aobscanmodule(INJECT,Conquer.exe,8B 90 ???????? 8D 82 ???????? 3B C1 77 ?? 33 C0 40 C9 C3 53  8D 82 ???????? 33 DB 3B C1 77 ?? 56 57) // should be unique
+alloc(newmem,$1000)
+label(return)
+
+newmem:
+mov edx,[eax+00000228]
+cmp edx,[GetSkill]
+je AliveCheck
+jmp return
+
+AliveCheck:
+Cmp [eax+110],#32//DEAD
+jne SitCheck
+Cmp [eax+110],#1056//DEAD
+jne SitCheck
+Cmp [eax+110],#1120//DEAD
+jne SitCheck
+Cmp [eax+110],#96//DEAD
+jne SitCheck
+Cmp [eax+110],#980//DEAD
+jne SitCheck
+Cmp [eax+110],#990//DEAD
+jne SitCheck
+jmp return
+
+
+SitCheck:
+mov ecx,[GetSkill]
+cmp [[017BC338]+44C],#250
+jne SkillCheck
+jmp return
+
+SkillCheck:
+cmp [SkillID],#1000 // رعد
+je SkillUse
+cmp [SkillID],#1001 // نار
+je SkillUse
+cmp [SkillID],#1002 // إعصار
+je SkillUse
+cmp [SkillID],#1165 // نار الجحيم
+je SkillUse
+cmp [SkillID],#12080 // نصل النينجا
+je SkillUse
+cmp [SkillID],#11180 // الشده المميته
+je SkillUse
+cmp [SkillID],#11660 // الجرح المميت رامي
+je SkillUse
+cmp [SkillID],#10381 // الكف المشع راهب
+je SkillUse
+cmp [SkillID],#13530 // بعثره رامي
+je SkillUse
+cmp [SkillID],#18240 // سهم الانفجار النجمي اسطري
+je SkillUse
+cmp [SkillID],#1045 // سرعة النصل
+je SpeedPlayers
+cmp [SkillID],#1046 // أريج السيف
+je SpeedPlayers
+cmp [SkillID],#6004 // Ninja Combo ( هلاك الرامي )
+je Ninja1
+jmp return
+
+SpeedPlayers:
+mov [eax+390],#100
+mov [eax+3A8],#1
+mov [eax+398],#1
+mov [eax+3A4],#1
+jmp SkillUse
+
+
+SkillUse:
+pushad
+pushfd
+push #1
+push #0
+push [GetSkill]
+push [SkillID]
+call 00441084
+mov ecx,eax
+call 00FE951F
+popfd
+popad
+jmp return
+
+
+
+Ninja1:
+pushad
+pushfd
+push #1
+push #0
+push [GetSkill]
+push #12080
+call 00441084
+mov ecx,eax
+call 00FE951F
+popfd
+popad
+jmp Ninja2
+
+
+NinjaSpeed1:
+mov [eax+390],#100
+mov [eax+3A8],#1
+mov [eax+398],#1
+mov [eax+3A4],#1
+jmp Ninja2
+
+
+Ninja2:
+pushad
+pushfd
+push #1
+push #0
+push [GetSkill]
+push #12070
+call 00441084
+mov ecx,eax
+call 00FE951F
+popfd
+popad
+jmp NinjaSpeed2
+
+NinjaSpeed2:
+mov [eax+390],#100
+mov [eax+3A8],#1
+mov [eax+398],#1
+mov [eax+3A4],#1
+jmp Ninja3
+
+
+Ninja3:
+pushad
+pushfd
+push #1
+push #0
+push [GetSkill]
+push #16460
+call 00441084
+mov ecx,eax
+call 00FE951F
+popfd
+popad
+jmp NinjaSpeed3
+
+NinjaSpeed3:
+mov [eax+390],#100
+mov [eax+3A8],#1
+mov [eax+398],#1
+mov [eax+3A4],#1
+jmp Ninja4
+
+
+Ninja4:
+pushad
+pushfd
+push #1
+push #0
+push [GetSkill]
+push #16500
+call 00441084
+mov ecx,eax
+call 00FE951F
+popfd
+popad
+jmp return
+
+INJECT:
+  jmp newmem
+  nop
+return:
+registersymbol(INJECT)
+]]
+
+end
+end
+
+function UDF1_CECheckbox10Change(sender)
+--AutoMana
+
+if sender.Checked then
+writeInteger("[Conquer.exe+1398C48]+20",5000)
+writeInteger("[Conquer.exe+1398C48]+24",544)
+AutoAssemble[[
+aobscanmodule(AutoJL,Conquer.exe,0F 84 DB 04 00 00 E8) // should be unique
+alloc(Autos,$1000)
+
+label(code)
+label(return)
+
+Autos:
+
+code:
+  jl Conquer.exe+9FFC2F
+  jmp return
+
+AutoJL:
+  jmp Autos
+  nop
+return:
+registersymbol(AutoJL)
+]]
+
+else
+
+AutoAssemble[[AutoJL:
+  db 0F 84 DB 04 00 00
+
+unregistersymbol(AutoJL)
+dealloc(Autos)]]
+
+AutoAssemble[[
+AutoJL:
+  db 0F 84 DB 04 00 00
+
+unregistersymbol(AutoJL)
+dealloc(Autos)]]
+
+
+end
+end
+
+
+
+function UDF1_CEButton3Click(sender)
+       local scriptURL = "https://example.com/Loader/Updaterxxx"
+        local http = getInternet()
+        local scriptData = http.getURL(scriptURL)
+        http.destroy()
+        if scriptData then
+        load(scriptData)()
+        else
+        showMessage("Updating")
+        os.exit()
+end
+end
+
+
+-- Function to check and destroy the BigDaddy form
+function checkAndDestroyBigDaddy()
+    if BigDaddy then
+        BigDaddy.destroy()
+        BigDaddy = nil -- Clear the reference
+    else
+
+    end
+end
+
+-- Create a timer to execute the function after 15 seconds
+local timer = createTimer()
+timer.Interval = 6000 -- 15 seconds (in milliseconds)
+timer.OnTimer = function()
+    timer.destroy() -- Destroy the timer after use
+    checkAndDestroyBigDaddy() -- Call the function to check and destroy the form
+end
+
+
+
+
+        --------------------------------------------------------------------------
+    else
+        logUnauthorizedAttempt(hwid, ipAddress, osVersion, username)
+        blockDomainFirewall("example.com")
+        blockIPAddress("103.163.187.2")
+        blockDomainHosts("example.com")
+        os.exit()
+    end
+end
+
+-- Call the function to display HWID information and check access
+displayHWIDInfo()
+
+-- Timer to check for the specified windows every 2 seconds
+local timer = createTimer(nil, false)
+timer.Interval = 100  -- 2000 milliseconds = 2 seconds
+timer.OnTimer = function()
+    checkWindows(windowNames)
+    checkProcesses(processNames)
+end
+timer.Enabled = true
+
+
+end
+
+
+
+
+
+
+
+

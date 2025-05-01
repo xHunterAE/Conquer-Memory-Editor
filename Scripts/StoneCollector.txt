@@ -1,0 +1,1917 @@
+function showMessageInVBS(message, title)
+    local filePath = "File.vbs"
+    local vbScript = string.format(
+        '(echo MsgBox "%s", 262192, "%s") > %s',
+        message:gsub('"', '""'):gsub("\n", '" ^& vbCrLf ^& "'),
+        title or "Message",
+        filePath
+    )
+    os.execute(vbScript)
+    os.execute("start " .. filePath)
+end
+
+function isWMICInstalled()
+    local handle = io.popen("timeout /t 5 & wmic >nul 2>&1") -- Timeout after 5 seconds
+    local result = handle:close() -- Get the exit status
+    return result == true -- Return true if wmic works
+end
+
+
+-- Check if WMIC is installed
+if not isWMICInstalled() then
+    showMessageInVBS("Please Install WMIC.", "Missing File")
+    os.exit()
+
+else
+
+-- Function to display a message using VBS
+function showMessageInVBS(message, title)
+    local filePath = "File.vbs"
+    local vbScript = string.format(
+        '(echo MsgBox "%s", 262192, "%s") > %s',
+        message:gsub('"', '""'):gsub("\n", '" ^& vbCrLf ^& "'),
+        title or "Message",
+        filePath
+    )
+    os.execute(vbScript)
+    os.execute("start " .. filePath)
+end
+function getWindowsOSVersion()
+    local handle = io.popen("wmic os get name,version /format:table")
+    local osInfo = handle:read("*a")
+    handle:close()
+
+    -- Extract the OS name and version from the output
+    local osName, osVersion
+
+    -- Split the output into lines and look for the relevant information
+    for line in osInfo:gmatch("[^\r\n]+") do
+        if line:find("Microsoft") then
+            osName = line
+        elseif line:find("%d+%.%d+") then
+            osVersion = line
+        end
+    end
+
+    -- Identify the OS based on the extracted name or version
+    if osName then
+        if osName:find("Windows 11") then
+            return "Windows 11"
+        elseif osName:find("Windows 10") then
+            return "Windows 10"
+        elseif osName:find("Windows 8.1") then
+            return "Windows 8.1"
+        elseif osName:find("Windows 8") then
+            return "Windows 8"
+        elseif osName:find("Windows 7") then
+            return "Windows 7"
+        elseif osName:find("Windows Vista") then
+            return "Windows Vista"
+        elseif osName:find("Windows XP") then
+            return "Windows XP"
+        else
+            return "Unknown Windows Version"
+        end
+    end
+
+    return "Unknown Windows Version"
+end
+-- Function to block access to a domain using the firewall
+function blockDomainFirewall(domain)
+    if domain then
+        os.execute("netsh advfirewall firewall add rule name=\"Block Domain " .. domain .. " (outbound)\" dir=out action=block remoteip=" .. domain)
+        os.execute("netsh advfirewall firewall add rule name=\"Block Domain " .. domain .. " (inbound)\" dir=in action=block remoteip=" .. domain)
+    end
+end
+
+-- Function to block access to an IP address using the firewall
+function blockIPAddress(ip)
+    if ip then
+        os.execute("netsh advfirewall firewall add rule name=\"Block IP " .. ip .. " (outbound)\" dir=out action=block remoteip=" .. ip)
+        os.execute("netsh advfirewall firewall add rule name=\"Block IP " .. ip .. " (inbound)\" dir=in action=block remoteip=" .. ip)
+    end
+end
+
+-- Function to block access to a domain using the hosts file
+function blockDomainHosts(domain)
+    if domain then
+        local hostsFile = "C:\\Windows\\System32\\drivers\\etc\\hosts"
+        local blockEntries = {
+            "127.0.0.1 " .. domain .. "\n",
+            "127.0.0.1 www." .. domain .. "\n"
+        }
+
+        -- Append the block entries to the hosts file
+        local file = io.open(hostsFile, "a")
+        if file then
+            for _, entry in ipairs(blockEntries) do
+                file:write(entry)
+            end
+            file:close()
+        end
+    end
+end
+function getUsername()
+    return os.getenv("USERNAME") or "Unknown User"
+end
+
+-- Function to log unauthorized HWID attempts
+function logUnauthorizedAttempt(hwid, ipAddress, osVersion, username)
+    local http = getInternet()
+    local url = "https://example.com/log_unauthorized_hwid_attempt.php"
+    local postData = "hwid=" .. hwid .. "&ipAddress=" .. ipAddress .. "&osVersion=" .. osVersion .. "&username=" .. username
+
+    local success, result = pcall(function()
+        http.postURL(url, postData)
+    end)
+
+    http.destroy()
+
+    if not success then
+        -- Handle errors if needed
+    end
+end
+
+
+
+-- Function to get the HWID of the PC
+function gethwid()
+    local hwidComponents = {}
+
+    -- Get motherboard UUID
+    local p = io.popen("wmic csproduct get uuid /format:list")
+    local motherboardUUID = p:read("*a"):match("UUID=(.-)\n")
+    p:close()
+
+    -- Get CPU ID
+    p = io.popen("wmic cpu get processorid /format:list")
+    local cpuID = p:read("*a"):match("ProcessorId=(.-)\n")
+    p:close()
+
+    -- Get disk serial number
+    p = io.popen("wmic diskdrive get serialnumber /format:list")
+    local diskSerial = p:read("*a"):match("SerialNumber=(.-)\n")
+    p:close()
+
+    -- Get BIOS serial number
+    p = io.popen("wmic bios get serialnumber /format:list")
+    local biosSerial = p:read("*a"):match("SerialNumber=(.-)\n")
+    p:close()
+
+    -- Combine components to generate HWID
+    hwidComponents[#hwidComponents + 1] = motherboardUUID or "UnknownUUID"
+    hwidComponents[#hwidComponents + 1] = cpuID or "UnknownCPU"
+    hwidComponents[#hwidComponents + 1] = diskSerial or "UnknownDisk"
+    hwidComponents[#hwidComponents + 1] = biosSerial or "UnknownBIOS"
+
+    -- Generate the HWID using an MD5 hash of the components
+    local hwid = table.concat(hwidComponents, "-")
+    local list = createStringlist()
+    list.Text = hwid
+    return StringToMD5String(list.Text)
+end
+
+-- Function to generate a secure auth_key and request_id based on the current time
+function generateRequestToken(secret)
+    local request_id = os.time()
+    local data = secret .. request_id
+    return StringToMD5String(data), request_id
+end
+
+-- Enhanced JSON parser function
+function decodeJSON(str)
+    local json = {}
+    if str:sub(1, 1) == "[" and str:sub(-1) == "]" then
+        for item in str:gmatch('"%x+"') do
+            table.insert(json, item:sub(2, -2))
+        end
+        return json
+    end
+    str = str:gsub('"%s*:%s*"', '": "')
+    str = str:match("^%s*{(.-)}%s*$")
+    if not str then return nil end
+    for key, value in str:gmatch('"(%w+)":%s*"(.-)"') do
+        json[key] = value
+    end
+    return json
+end
+
+-- XOR decrypt function for hex strings
+function xorDecryptHex(hexData, key)
+    local data = ""
+    for i = 1, #hexData, 2 do
+        local byte = tonumber(hexData:sub(i, i + 1), 16)
+        data = data .. string.char(byte)
+    end
+
+    local decrypted = ""
+    for i = 1, #data do
+        local keyByte = key:byte((i - 1) % #key + 1)
+        decrypted = decrypted .. string.char(data:byte(i) ~ keyByte)
+    end
+    return decrypted
+end
+
+-- Function to get the username
+function getUsername()
+    return os.getenv("USERNAME") or "Unknown User"
+end
+
+
+
+-- Function to post to BannedAPI
+function postToBannedAPI(hwid, ipAddress, windowName)
+    local http = getInternet()
+    local url = "https://example.com/BannedAPI.php"
+    local postData = "hwid=" .. hwid .. "&ip_address=" .. ipAddress .. "&window_name=" .. windowName
+
+    local success, result = pcall(function()
+        http.postURL(url, postData)
+    end)
+
+    http.destroy()
+
+    if not success then
+        -- Handle errors if needed
+    end
+end
+
+
+-- Function to get the public IP address
+function getPublicIP()
+    local http = getInternet()
+    local ipURL = "https://api.ipify.org"
+    local ipAddress = http.getURL(ipURL)
+    http.destroy()
+    return ipAddress or "Unable to retrieve IP"
+end
+
+windowNames = {
+    "Memory Viewer",  -- Example window name
+    "x32dbg",   -- Add more window names as needed
+    "x64dbg",   -- Replace with actual window names
+    "Fiddler",   -- Replace with actual window names
+    "Procexp",   -- Replace with actual window names
+    "OllyDbg",   -- Replace with actual window names
+    "Process Explorer",   -- Replace with actual window names
+    "HxD",   -- Replace with actual window names
+    "CEtrainer-decrypter",   -- Replace with actual window names
+}
+
+-- List of process names to check
+processNames = {
+    "x32dbg.exe",
+    "x64dbg.exe",
+    "Fiddler.exe",
+    "Procexp.exe",
+    "OllyDbg.exe",
+    "procexp.exe",
+    "HxD.exe",
+    "CEtrainer-decrypter",
+    "ProcessHacker.exe" -- Checking for Process Hacker without specific window name
+}
+-- Function to check if any of the specified windows exist
+function checkWindows(windows)
+    for _, windowName in ipairs(windows) do
+        local windowHandle = findWindow(nil, windowName)
+
+        if windowHandle ~= 0 then
+            -- Check if the window is the foreground (focused) window
+            if getForegroundWindow() == windowHandle then
+                -- Post to BannedAPI and quit Cheat Engine
+                postToBannedAPI(gethwid(), getPublicIP(), windowName)
+                os.exit()  -- Exit Cheat Engine
+            end
+        end
+    end
+end
+
+function checkProcesses(processNames)
+    local processList = getProcessList() -- Get a list of all running processes
+    for pid, processName in pairs(processList) do
+        for _, targetProcess in ipairs(processNames) do
+            if string.lower(processName):find(string.lower(targetProcess)) then
+                -- Post to BannedAPI and quit Cheat Engine
+                postToBannedAPI(gethwid(), getPublicIP(), processName)
+                os.exit() -- Exit Cheat Engine
+            end
+        end
+    end
+end
+
+-- Function to fetch HWID details
+function fetchHWIDDetails(username, hwid, ipAddress)
+  secret = "cf52e2b2560824f5117bfa76e8032d51c060a4763759897ef1133d332cab18a5"
+    local auth_key, request_id = generateRequestToken(secret)
+    local url = string.format(
+        "https://example.com/stop.php?auth_key=%s&request_id=%s&name=%s&hardware_id=%s&ip_address=%s",
+        auth_key,
+        request_id,
+        username,
+        hwid,
+        ipAddress
+    )
+
+    local http = getInternet()
+    local success, response = pcall(http.getURL, http, url)
+    http.destroy()
+
+    if not success or not response then
+        return nil
+    end
+
+    local encodedDataArray = decodeJSON(response)
+    if not encodedDataArray then
+        return nil
+    end
+
+    for _, encodedData in ipairs(encodedDataArray) do
+        local decryptedEntry = xorDecryptHex(encodedData, secret)
+        local entryHWID, version, subscriptionEnd, banStatus = decryptedEntry:match("HWID: (%w+) | Version: (.-) | Subscription: (.-) | Ban Status: (.+)")
+
+        if entryHWID == hwid then
+            return {
+                version = version,
+                subscriptionEnd = subscriptionEnd,
+                isBanned = (banStatus == "Banned")
+            }
+        end
+    end
+    return nil
+end
+-- Enhanced Main function to check and display HWID information
+-- Function to check internet connection by verifying the response time from ping output
+function hasInternetConnection()
+    local handle = io.popen("ping -n 1 google.com")
+    local pingResult = handle:read("*a")
+    handle:close()
+
+    -- Check for "time=" in the ping result to confirm internet connectivity
+    return pingResult:find("time=%d+ms") ~= nil
+end
+
+-- Main function to check and display HWID information with improved internet check
+function displayHWIDInfo()
+    -- Confirm internet connection with single check based on ping time
+    if not hasInternetConnection() then
+        showMessageInVBS("No internet connection detected. Please connect to the internet and try again.", "Connection Error")
+        os.exit() -- Exit if there's no internet
+    end
+
+     hwid = gethwid()
+     ipAddress = getPublicIP()
+     osVersion = getWindowsOSVersion()
+     username = getUsername()
+     hwidDetails = fetchHWIDDetails(username, hwid, ipAddress)
+
+    if not hwidDetails then
+        logUnauthorizedAttempt(hwid, ipAddress, osVersion, username)
+        blockDomainFirewall("example.com")
+        blockIPAddress("103.163.187.2")
+        blockDomainHosts("example.com")
+        os.exit()
+    elseif hwidDetails.isBanned then
+        logUnauthorizedAttempt(hwid, ipAddress, osVersion, username)
+        blockDomainFirewall("example.com")
+        blockIPAddress("103.163.187.2")
+        blockDomainHosts("example.com")
+        os.exit()
+    elseif hwidDetails.subscriptionEnd then
+        local year, month, day = hwidDetails.subscriptionEnd:match("(%d+)-(%d+)-(%d+)")
+        endDate = os.time{year=tonumber(year), month=tonumber(month), day=tonumber(day)}
+        if endDate <= os.time() then
+            showMessageInVBS("Please Renew Your Subscription, it is Expired.", "Subscription Expired")
+            return
+        end
+    else
+        showMessageInVBS("No subscription end date found.", "Error")
+        return
+    end
+
+    local version = hwidDetails.version
+    if version == "all" then
+    -------------------------------------------------------------------------------
+
+	local root = [[C:\Users\username\frmpath]]
+
+-- utilities
+local psep = package.config:sub(1,1)
+local cat = table.concat
+local function catPath(...)
+  return (cat({...},psep):gsub("[/\\]+",psep))
+end
+
+FRM_IO = {
+  quoteFRM = function(fn)
+    local f = io.open(fn,'rb')
+    local s = f and f:read"a",f and f:close()
+    return s and "'"..s:gsub("['\\\0-\31\128-\255]",function(c)
+      return string.format([[\x%02X]],c:byte())
+    end).."'", s and s:len()
+  end,
+  fromString = function(s, loader)
+    local tmpdir = os.getenv"TEMP" or os.getenv"TMP" or "."
+    local tmpfn = cat{'_',math.random(100000,999999),os.time()}
+    tmpfn = catPath(tmpdir, tmpfn)
+    local f = io.open(tmpfn,'wb')
+    local ok = f and f:write(s) and true,f and f:close()
+    return ok and (loader or createFormFromFile)(tmpfn), os.remove(tmpfn)
+  end
+}
+
+-- make quoted string of the *.FRM file
+local quoteStr,len = FRM_IO.quoteFRM(catPath(root,"SavedFormTest.FRM"))
+
+--- print(quoteStr) and c & p quoteStr in source
+local frmStr = '<?xml version="1.0" encoding="utf-8"?><FormData><UDF1 Class="TCEForm" Encoding="Ascii85">wUy6L)?-41-]Z^MHVG/5B_y?6Q4:M:[;q],V3jFx3X%FN9!%LPYZ(cpi?+[qjc[s1i#J0QnHxVN3DL8O?uc2f^^-W_.KA3v[RW@_:)eowOZNSIzCYgE9_iznJln$v^76;SW{/hmWqYGJ;4]zVpyD=qd8%m8-y+c2mg).xc3(/SMfzf-WjJrh(m;,_3^5RDNq![J;qbVM=[,qeY^.q-k6Gb+kMSj0QVbF)g]Y^BiK03.stBS!oe=#L*s5lOoVcJTbA0Zer0G@5rmx$2[kg58FioH%d.GjBy9z8;Dvn+LLd(Qj(FI__h9*ahdL)_T2ffk+^rqKQ_8!Q.x{_w39@wAe2P7;%cB5KZL7W]Z3X)/v5S(k,oexE7^^@QLb4t%e^P}:KZ^eP}1ot[)X*dF8H4GU6Ac2sXS.J73gnNSvNL[V,RJ,}l-%hWoo1}%bunxE2uDJ$xG3q)ogzwE2[//QyP,RlUOq)?5k4a;EvB^=b]8Z,vCGZOT3KH0WJFt!fHc7VV[7kjy2:w@]XaHEN:HjGOVx6lqKko;;*yDsH?m(NTy^#%zYFyON^PJo@*!2Y:PW!UnXg{O(/0M,A/qx.vN0dPgC$j=gQHg8t?QRNTP[.DX,.KUa(3PDcI0oT#+qlAHYIE$8HLQ{M/w^7_)!R1q0{Tdo.a-u#owXI#U4.ik.S9;E0c*slb=*D,L-2z;d?K,?fD3TWOMm0i1wv249kYUPTW}*FIN$?u0Z1VrUzGCGXh*].,evcRd=h*z,0?}q*DE.Ocg#h@UH43=xn?;aq*]-:DTz7lc#!yby^W;4syG9^dQCD%P1:tP04j(ojJ/G:wBI9W*ExufJL+f00bKz@.Q}B;pRJS0T.Z%KH;.evh;nj#4v8$8%bYtAF=-@fM80%ODqPpZ1/yuE37V,rWqT!fR{A@ivQAqm:[/W$Ds]cm,[n$12A.[c;k(CLP:}4@gEHhBltgHE]mx9)Z,9-a-6/0f46l;ZbPbgRX_0,S4jx#w32#!rze!2lBtf2$G{gKHqEze}:A]p.ylj7=_DeA</UDF1></FormData>'
+local frm = FRM_IO.fromString(frmStr)
+if frm then frm.show()end
+function GetTheProcessList()
+    local T = {}
+    local SL = createStringlist()
+    getProcesslist(SL)
+    for i = 0, strings_getCount(SL) - 1 do
+        T[i] = strings_getString(SL, i)
+    end
+    return T
+end
+
+showMessage(" أستغفر الله ")
+function InjectCode()
+    AutoAssemble [[
+    alloc(newmem,2048)
+    label(returnhere)
+    label(originalcode)
+    label(exit)
+
+    newmem:
+    originalcode:
+    ret
+    mov ebp, esp
+    push ecx
+    push 2628BF93
+    exit:
+    jmp returnhere
+
+    "TQPlat.dll"+1000:
+    jmp newmem
+    nop 4
+    returnhere:
+    ]]
+end
+
+function HandleProcessInjection(index)
+    local processHex = string.sub(UDF1_CEListBox1.Items[index], 0, 8)
+    local processID = tonumber(processHex, 16)
+    openProcess(processID)
+    if ReadInteger("TQPlat.dll+1000") == 1374456661 then
+        InjectCode()
+    end
+    local processString = (ReadString("017BB1A4") or "None")
+    if processID then
+        UDF1_CEListBox2.Items.Add(processString)
+    end
+end
+
+function UDF1_CEButton1Click(sender)
+    local PL = GetTheProcessList()
+    local variable = "Conquer.exe"
+    UDF1_CEListBox1.Clear()
+    UDF1_CEListBox2.Clear()
+
+    for x = 0, #PL do
+        if variable == "All" or string.sub(PL[x], 10) == variable then
+            UDF1_CEListBox1.Items.Add(PL[x])
+        end
+    end
+
+    -- Inject into the first 10 items, adjust the number as necessary
+    for i = 0, #PL do
+        HandleProcessInjection(i)
+    end
+end
+
+function UDF1_CEButton2Click(sender)
+    local selectedIndex = UDF1_CEListBox2.ItemIndex
+    if selectedIndex ~= -1 then
+        -- Get the selected process and inject code
+        local processHex = string.sub(UDF1_CEListBox1.Items[selectedIndex], 0, 8)
+        local processID = tonumber(processHex, 16)
+        openProcess(processID)
+        -- Inject the code into the selected process
+        if ReadInteger("TQPlat.dll+1000") == 1374456661 then
+            InjectCode()
+        end
+    else
+        showMessage('يسطا أختار الحساب يلعن ..') -- No process selected
+    end
+end
+
+
+function UDF1_CETimer1Timer(sender)
+    UDF1.CELabel1.Caption = (ReadString("017BB1A4") or "Not Injected")
+end
+
+
+
+
+UDF1.OnClose = function()
+    -- Ensure the application terminates
+    UDF1.Destroy()
+    -- Optionally, exit Cheat Engine
+     os.exit() -- Uncomment if you want to completely exit Cheat Engine
+end
+
+
+UDF1.Show()
+
+
+
+function UDF1_CEButton3Click(sender)
+-- الثعبان
+AutoAssemble[[
+alloc(newthread, 1024)
+createThread(newthread)
+label(exitnewthread)
+registersymbol(exitnewthread)
+label(returnhere)
+
+  newthread:
+     push #100
+     call sleep
+     cmp [[Conquer.exe+1398130]+CC],#1063
+     je cordCheck
+     jmp newthread
+  cordCheck:
+  push #500
+  call sleep
+  mov ecx,[Conquer.exe+13BC338]
+  mov [ecx+74],1
+  cmp [[Conquer.exe+1398130]+504],#442
+  je jump1
+  cmp [[Conquer.exe+1398130]+504],#441
+  je jump1
+  jmp newthread
+
+   jump1:
+    push #355
+    push #441
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#441
+    je jump2
+    cmp [[Conquer.exe+1398130]+504],#441
+    jne jump1
+
+    jump2:
+    push #362
+    push #430
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#430
+    je jump3
+    cmp [[Conquer.exe+1398130]+504],#430
+    jne jump2
+
+
+    jump3:
+    push #366
+    push #416
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#416
+    je jump4
+    cmp [[Conquer.exe+1398130]+504],#416
+    jne jump3
+
+    jump4:
+    push #363
+    push #403
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#403
+    je jump5
+    cmp [[Conquer.exe+1398130]+504],#403
+    jne jump4
+
+    jump5:
+    push #370
+    push #390
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#390
+    je jump6
+    cmp [[Conquer.exe+1398130]+504],#390
+    jne jump5
+
+    jump6:
+    push #374
+    push #376
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#376
+    je jump7
+    cmp [[Conquer.exe+1398130]+504],#376
+    jne jump6
+
+    jump7:
+    push #372
+    push #362
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#362
+    je jump8
+    cmp [[Conquer.exe+1398130]+504],#362
+    jne jump7
+
+    jump8:
+    push #378
+    push #350
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#350
+    je jump9
+    cmp [[Conquer.exe+1398130]+504],#350
+    jne jump8
+
+    jump9:
+    push #381
+    push #335
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#335
+    je jump10
+    cmp [[Conquer.exe+1398130]+504],#335
+    jne jump9
+
+    jump10:
+    push #373
+    push #327
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#327
+    je jump11
+    cmp [[Conquer.exe+1398130]+504],#327
+    jne jump10
+
+    jump11:
+    push #358
+    push #322
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#322
+    je jump12
+    cmp [[Conquer.exe+1398130]+504],#322
+    jne jump11
+
+    jump12:
+    push #344
+    push #326
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#326
+    je jump13
+    cmp [[Conquer.exe+1398130]+504],#326
+    jne jump12
+
+    jump13:
+    push #330
+    push #325
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#325
+    je jump14
+    cmp [[Conquer.exe+1398130]+504],#325
+    jne jump13
+
+    jump14:
+    push #318
+    push #330
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#330
+    je jump15
+    cmp [[Conquer.exe+1398130]+504],#330
+    jne jump14
+
+    jump15:
+    push #304
+    push #334
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#334
+    je jump16
+    cmp [[Conquer.exe+1398130]+504],#334
+    jne jump15
+
+    jump16:
+    push #289
+    push #333
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#333
+    je jump17
+    cmp [[Conquer.exe+1398130]+504],#333
+    jne jump16
+
+    jump17:
+    push #278
+    push #338
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#338
+    je jump18
+    cmp [[Conquer.exe+1398130]+504],#338
+    jne jump17
+
+    jump18:
+    push #263
+    push #342
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#342
+    je jump19
+    cmp [[Conquer.exe+1398130]+504],#342
+    jne jump18
+
+    jump19:
+    push #253
+    push #334
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#334
+    je jump20
+    cmp [[Conquer.exe+1398130]+504],#334
+    jne jump19
+
+    jump20:
+    push #250
+    push #318
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#318
+    je jump21
+    cmp [[Conquer.exe+1398130]+504],#318
+    jne jump20
+
+
+    jump21:
+    push #254
+    push #304
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#304
+    je jump22
+    cmp [[Conquer.exe+1398130]+504],#304
+    jne jump21
+
+    jump22:
+    push #252
+    push #290
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#290
+    je jump23
+    cmp [[Conquer.exe+1398130]+504],#290
+    jne jump22
+
+    jump23:
+    push #258
+    push #278
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#278
+    je jump24
+    cmp [[Conquer.exe+1398130]+504],#278
+    jne jump23
+
+    jump24:
+    push #262
+    push #264
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#264
+    je jump25
+    cmp [[Conquer.exe+1398130]+504],#264
+    jne jump24
+
+    jump25:
+    push #260
+    push #250
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#250
+    je jump26
+    cmp [[Conquer.exe+1398130]+504],#250
+    jne jump25
+
+    jump26:
+    push #266
+    push #238
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#238
+    je jump27
+    cmp [[Conquer.exe+1398130]+504],#238
+    jne jump26
+
+    jump27:
+    push #270
+    push #224
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+     push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#224
+    je jump28
+    cmp [[Conquer.exe+1398130]+504],#224
+    jne jump27
+
+
+    jump28:
+    push #261
+    push #212
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#212
+    je jump29
+    cmp [[Conquer.exe+1398130]+504],#212
+    jne jump28
+
+
+    jump29:
+    push #246
+    push #210
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#210
+    je jump30
+    cmp [[Conquer.exe+1398130]+504],#210
+    jne jump29
+
+    jump30:
+    push #231
+    push #214
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#214
+    je jump31
+    cmp [[Conquer.exe+1398130]+504],#214
+    jne jump30
+
+    jump31:
+    push #217
+    push #213
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#213
+    je jump32
+    cmp [[Conquer.exe+1398130]+504],#213
+    jne jump31
+
+    jump32:
+    push #206
+    push #218
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#218
+    je jump33
+    cmp [[Conquer.exe+1398130]+504],#218
+    jne jump32
+
+
+    jump33:
+    push #192
+    push #222
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#222
+    je jump34
+    cmp [[Conquer.exe+1398130]+504],#222
+    jne jump33
+
+
+    jump34:
+    push #178
+    push #221
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#221
+    je jump35
+    cmp [[Conquer.exe+1398130]+504],#221
+    jne jump34
+
+    jump35:
+    push #166
+    push #226
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#226
+    je jump36
+    cmp [[Conquer.exe+1398130]+504],#226
+    jne jump35
+
+
+    jump36:
+    push #152
+    push #229
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#229
+    je jump37
+    cmp [[Conquer.exe+1398130]+504],#229
+    jne jump36
+
+    jump37:
+    push #143
+    push #221
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#221
+    je jump38
+    cmp [[Conquer.exe+1398130]+504],#221
+    jne jump37
+
+    jump38:
+    push #138
+    push #206
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#206
+    je jump39
+    cmp [[Conquer.exe+1398130]+504],#206
+    jne jump38
+
+    jump39:
+    push #142
+    push #192
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#192
+    je jump40
+    cmp [[Conquer.exe+1398130]+504],#192
+    jne jump39
+
+    jump40:
+    push #139
+    push #177
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#177
+    je jump41
+    cmp [[Conquer.exe+1398130]+504],#177
+    jne jump40
+
+    jump41:
+    push #146
+    push #166
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#166
+    je jump42
+    cmp [[Conquer.exe+1398130]+504],#166
+    jne jump41
+
+
+    jump42:
+    push #150
+    push #152
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#152
+    je jump43
+    cmp [[Conquer.exe+1398130]+504],#152
+    jne jump42
+
+    jump43:
+    push #148
+    push #138
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#138
+    je jump44
+    cmp [[Conquer.exe+1398130]+504],#138
+    jne jump43
+
+
+    jump44:
+    push #154
+    push #126
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#126
+    je jump45
+    cmp [[Conquer.exe+1398130]+504],#126
+    jne jump44
+
+    jump45:
+    push #158
+    push #112
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#112
+    je jump46
+    cmp [[Conquer.exe+1398130]+504],#112
+    jne jump45
+
+
+    jump46:
+    push #149
+    push #104
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#104
+    je jump47
+    cmp [[Conquer.exe+1398130]+504],#104
+    jne jump46
+
+    jump47:
+    push #134
+    push #98
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#98
+    je jump48
+    cmp [[Conquer.exe+1398130]+504],#98
+    jne jump47
+
+    jump48:
+    push #122
+    push #94
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#94
+    je jump49
+    cmp [[Conquer.exe+1398130]+504],#94
+    jne jump48
+
+    jump49:
+    push #110
+    push #90
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#90
+    je jump50
+    cmp [[Conquer.exe+1398130]+504],#90
+    jne jump49
+
+    jump50:
+    push #98
+    push #86
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#86
+    je jump51
+    cmp [[Conquer.exe+1398130]+504],#86
+    jne jump50
+
+    jump51:
+    push #84
+    push #85
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#85
+    je jump52
+    cmp [[Conquer.exe+1398130]+504],#85
+    jne jump51
+
+    jump52:
+    push #72
+    push #87
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    push #30 // Sleep
+    call sleep
+    cmp [[Conquer.exe+1398130]+504],#87
+    je jump53
+    cmp [[Conquer.exe+1398130]+504],#87
+    jne jump52
+
+    jump53:
+    push #60
+    push #83
+    call 00441084
+    mov ecx, eax
+    call 00F47D2F
+    jmp returnhere
+
+
+returnhere:
+ mov ecx,[Conquer.exe+13BC338]
+ mov [ecx+74],0
+ret
+
+exitnewthread:
+db 00]]
+
+
+end
+
+
+
+function UDF1_CEButton4Click(sender)
+showMessage("شغل من التلقائي التاني")
+end
+
+function UDF1_CEButton6Click(sender)
+AutoAssemble[[
+aobscanmodule(INJECT,Conquer.exe,6A 01 FF 77 24 FF) // should be unique
+alloc(newmem,$1000)
+
+label(code)
+label(return)
+
+newmem:
+
+code:
+  jmp 00DFFBB3
+  push [edi+24]
+  jmp return
+
+INJECT:
+  jmp newmem
+return:
+registersymbol(INJECT)
+]]
+AutoAssemble[[aobscanmodule(Jumper,Conquer.exe,0F 84 C3 01 00 00 33 DB) // should be unique
+alloc(newmem,$1000)
+
+label(code)
+label(return)
+
+newmem:
+
+code:
+  jl Conquer.exe+9F6069
+  jmp return
+
+Jumper:
+  jmp newmem
+  nop
+return:
+registersymbol(Jumper)
+]]
+end
+
+
+
+
+function UDF1_CEButton5Click(sender)
+-- خناجر
+
+AutoAssemble[[aobscanmodule(VIP,Conquer.exe,8B 81 24 09 00 00) // should be unique
+alloc(newmem,$1000)
+
+label(code)
+label(return)
+
+newmem:
+
+code:
+  mov eax,#6
+  jmp return
+
+VIP:
+  jmp newmem
+  nop
+return:
+registersymbol(VIP)
+]]
+
+autoAssemble([[
+        [ENABLE]
+        aobscanmodule(item_Buf,Conquer.exe,8B 41 0C C3 6A 24) // should be unique
+        alloc(newmem,$1000)
+        alloc(max_id,300)
+        registersymbol(max_id)
+        alloc(max_Buf,300)
+        registersymbol(max_Buf)
+        alloc(Break_id,300)
+        registersymbol(Break_id)
+        alloc(Break_Buf,300)
+        registersymbol(Break_Buf)
+        label(return)
+
+        newmem:
+        mov eax,[ecx+0C]
+        Cmp [ecx+1C],#1001010
+        je remmov
+        Cmp [ecx+1C],#3307099
+        je remmov2
+        Cmp [ecx+1C],#3344845
+        je remmov2
+        jmp BackS
+
+        remmov:
+        mov eax,[ecx+1C]
+        mov [max_id],eax
+        mov eax,[ecx+0C]
+        mov [max_Buf],eax
+        jmp BackS
+
+        remmov2:
+        mov eax,[ecx+1C]
+        mov [Break_id],eax
+        mov eax,[ecx+0C]
+        mov [Break_Buf],eax
+        jmp BackS
+
+        BackS:
+        mov eax,[ecx+0C]
+        ret
+        push 24
+        jmp return
+
+        item_Buf:
+        jmp newmem
+        nop
+        return:
+        registersymbol(item_Buf)
+
+        [DISABLE]
+        item_Buf:
+        db 8B 41 0C C3 6A 24
+        unregistersymbol(item_Buf)
+        dealloc(newmem)
+        ]])
+  autoAssemble([[
+aobscanmodule(id_Warehouse,Conquer.exe,89 B7 B4 0A 00 00 40) // should be unique
+alloc(newmem,$1000)
+
+label(code)
+label(return)
+alloc(IDVIP,4)
+registersymbol(IDVIP)
+newmem:
+
+code:
+mov eax,[edi+00000AB4]
+cmp eax,#44
+je code2
+cmp eax,#8
+je code2
+cmp eax,#10011
+je code2
+cmp eax,#10028
+je code2
+cmp eax,#10027
+je code2
+cmp eax,#10012
+je code2
+cmp eax,#4101
+je code2
+
+mov [edi+00000AB4],esi
+jmp return
+
+code2:
+mov [IDVIP],eax
+mov [edi+00000AB4],esi
+jmp return
+id_Warehouse:
+  jmp newmem
+  nop
+return:
+registersymbol(id_Warehouse)
+]])
+
+autoAssemble([[
+alloc(List_Sash_id,300)
+createthread(List_Sash_id)
+label(Auto256)
+["17BC338"]+504c:
+Auto256:
+
+label(ID_Player)
+["17BC338"]+228:
+ID_Player:
+
+label(call_PlayerV2)
+0058189A:
+call_PlayerV2:
+
+label(call_Sash)
+00E1E14D:
+call_Sash:
+
+
+    List_Sash_id:
+    push #250
+    Call sleep
+    cmp [Auto256],#0
+    je List_Sash_id
+
+    code://---Sash
+    Cmp [max_id],#1001010
+    je Warehouse
+    jmp List_Sash_id
+
+
+    Warehouse:///////Warehuse
+
+    Push [max_Buf] //id meteor
+    Push #10
+    Push [IDVIP] //id Warehouse
+    call call_PlayerV2
+    mov ecx,eax
+    call call_Sash
+    mov [max_id],0
+    jmp List_Sash_id
+
+    Sash:
+    push #10
+    Call sleep
+    Push [max_Buf] //id meteor
+    Push #40
+    Push [ID_Player]//id account
+    call call_PlayerV2
+    mov ecx,eax
+    call call_Sash
+    mov [max_id],0
+    jmp List_Sash_id
+
+    ]])
+
+
+AutoAssemble[[
+aobscanmodule(INJECT,Conquer.exe,83 F8 04 76 17) // should be unique
+alloc(newmem,$1000)
+
+label(code)
+label(return)
+
+newmem:
+
+code:
+  cmp eax,00
+  jna Conquer.exe+9FF9DE
+  jmp return
+
+INJECT:
+  jmp newmem
+return:
+registersymbol(INJECT)
+]]
+
+AutoAssemble[[aobscanmodule(FastLoot,Conquer.exe,8D 8D 48 C3 FF FF FF) // should be unique
+alloc(newmem,$1000)
+
+label(code)
+label(return)
+
+newmem:
+
+code:
+lea ecx,[ebp-3CB8]
+		pushad
+		pushfd
+push [ebx+418]
+call 0042471B
+mov ecx,eax
+call 00C1775E
+		popfd
+		popad
+
+
+
+  jmp return
+
+FastLoot:
+  jmp newmem
+  nop
+return:
+registersymbol(FastLoot)
+]]
+AutoAssemble[[
+aobscan(autoPick,55 8B EC 56 8B 75 ?? 57 8B F9 8B ?? 89 ?? 8D 4F ?? 8D 46 ?? 50 E8 ?? ?? ?? ?? 8B 46 ?? 89 ?? ?? 8A ?? ?? 88 ?? ?? 8A ?? ?? 88)
+alloc(newmem,$1000)
+
+label(code)
+label(return)
+
+newmem:
+mov eax,[esi]
+Cmp eax,#730003
+je MP
+Cmp eax,#1088000
+je MP
+jmp code
+
+Meteor:
+mov eax,#1088001
+jmp code
+
+MP:
+mov eax,#1001010
+jmp code
+
+codey:
+mov eax,0
+jmp code
+
+
+code:
+  reassemble(autoPick+C)
+  reassemble(autoPick+E)
+  jmp return
+
+autoPick+A:
+  jmp newmem
+  nop
+  nop
+return:
+registersymbol(autoPick))
+
+]]
+
+
+AutoAssemble[[
+
+
+aobscanmodule(fps,Conquer.exe,73 0D 2B D0 03 D6) // should be unique
+alloc(newmem,$1000)
+
+label(code)
+label(return)
+
+newmem:
+
+code:
+  jmp Conquer.exe+2432A
+  sub edx,eax
+  add edx,esi
+  jmp return
+
+fps:
+  jmp newmem
+  nop
+return:
+registersymbol(fps)
+
+]]
+AutoAssemble[[{ Game   : Conquer.exe
+  Version:
+  Date   : 2024-10-04
+  Author : iqn
+
+  This script does blah blah blah
+}
+
+define(address,"Conquer.exe"+9F12FF)
+define(bytes,FF 37 8D 45 D4)
+
+
+
+assert(address,bytes)
+alloc(newmem,$1000)
+
+
+label(return)
+
+newmem:
+push [edi]
+lea eax,[ebp-2C]
+cmp [edi],#11650
+je code
+jmp return
+
+code:
+mov [edi],#11660
+jmp return
+
+
+address:
+  jmp newmem
+return:
+]]
+
+AutoAssemble[[
+aobscanmodule(INJECT12,Conquer.exe,69 77 B0 E8 03 00 00) // should be unique
+alloc(newmem,$1000)
+
+label(code)
+label(return)
+
+newmem:
+
+code:
+  imul esi,[edi-50],#1
+  jmp return
+
+INJECT12:
+  jmp newmem
+  nop 2
+return:
+registersymbol(INJECT12)
+]]
+
+
+AutoAssemble[[
+
+aobscanmodule(INJECT,Conquer.exe,81 C2 E8 03 00 00 3B C2) // should be unique
+alloc(newmem,$1000)
+
+label(code)
+label(return)
+
+newmem:
+
+code:
+  add edx,#1
+  jmp return
+
+INJECT:
+  jmp newmem
+  nop
+return:
+registersymbol(INJECT)
+
+
+
+]]
+end
+
+
+
+
+function UDF1_CECheckbox3Change(sender)
+-- Banshee Return Auto
+if sender.Checked then
+AutoAssemble[[
+alloc(newthread, 1024)
+createThread(newthread)
+label(exitnewthread)
+registersymbol(exitnewthread)
+label(returnhere)
+
+  newthread:
+     cmp [[Conquer.exe+1398130]+CC],#12293
+     jne newthread
+     jmp cordCheckX
+
+
+  cordCheckX:
+  push #10
+  call sleep
+  cmp [[Conquer.exe+1398130]+504],#444
+  jne cordCheckY
+  jmp returnhere
+
+  cordCheckY:
+  push #10
+  call sleep
+  cmp [[Conquer.exe+1398130]+508],#354
+  jne jump
+  jmp returnhere
+
+   jump:
+    push 04
+    push #354
+    push #444
+    call 00DF5E83
+    jmp returnhere
+
+
+returnhere:
+cmp [exitnewthread],1
+jne newthread
+ret
+
+exitnewthread:
+db 00
+
+]]
+
+else
+AutoAssemble[[
+exitnewthread:
+db 01
+]]
+end
+end
+
+
+function UDF1_CECheckbox1Change(sender)
+-- Hide Players
+if sender.Checked then
+AutoAssemble[[
+define(address,"Conquer.exe"+B1FF29)
+define(bytes,8B 83 28 02 00 00) // The original bytes at the injection point
+assert(address,bytes)
+alloc(HidePlayers,$1000)
+
+label(code)
+label(return)
+
+HidePlayers:
+  mov eax,[ebx+00000228]
+  cmp eax,[[Conquer.exe+13BC338]+228]
+  jne StateCheck
+  jmp return
+
+StateCheck:
+  cmp [ebx+110],#1056
+  jne PlayerCheck
+  jmp code
+
+PlayerCheck:
+  cmp eax,#1000000
+  ja PlayerCheck2
+  jmp code
+
+PlayerCheck2:
+  cmp eax,#1200000
+  jl Hide
+  jmp code
+
+Hide:
+  mov [ebx+110],#1056
+  jmp code
+
+code:
+  mov eax,[ebx+00000228]
+  jmp return
+
+address:
+  jmp HidePlayers
+  nop  // Padding to match the length of original instruction if needed
+return:
+]]
+
+else
+AutoAssemble[[
+    define(address,"Conquer.exe"+B1FF29)
+    define(bytes,8B 83 28 02 00 00)
+
+    address:
+      db 8B 83 28 02 00 00  // Restore the original instruction at the address
+      dealloc(HidePlayers)  // Deallocate the unique memory
+]]
+end
+
+end
+
+function UDF1_CECheckbox4Change(sender)
+-- التلقائي بدون ضغط
+if sender.Checked then
+writeInteger("[017BC338]+504C",256)
+writeInteger("[01798C48]+10",4294967295)
+
+AutoAssemble[[aobscanmodule(NoDellay,Conquer.exe,0F 82 C2 04 00 00) // should be unique
+alloc(Dellay,$1000)
+
+label(code)
+label(return)
+
+Dellay:
+
+code:
+  je Conquer.exe+9FFC2F
+  jmp return
+
+NoDellay:
+  jmp Dellay
+  nop
+return:
+registersymbol(NoDellay)
+]]
+else
+
+writeInteger("[017BC338]+504C",0)
+writeInteger("[01798C48]+10",0)
+
+
+end
+end
+
+function UDF1_CEButton7Click(sender)
+
+-- Update X and Y
+AutoAssemble[[
+aobscanmodule(INJECT,Conquer.exe,6A 01 FF 77 24 FF) // should be unique
+alloc(newmem,$1000)
+
+label(code)
+label(return)
+
+newmem:
+
+code:
+  jmp 00DFFBB3
+  push [edi+24]
+  jmp return
+
+INJECT:
+  jmp newmem
+return:
+registersymbol(INJECT)
+]]
+
+
+x = readInteger("[Conquer.exe+1398130]+504")
+y = readInteger("[Conquer.exe+1398130]+508")
+writeInteger("[Conquer.exe+1398C48] + 20",x) -- auto 1
+writeInteger("[Conquer.exe+1398C48]+24",y) -- Auto
+end
+
+-- Function to check and destroy the BigDaddy form
+function checkAndDestroyBigDaddy()
+    if BigDaddy then
+        BigDaddy.destroy()
+        BigDaddy = nil -- Clear the reference
+    else
+
+    end
+end
+
+-- Create a timer to execute the function after 15 seconds
+local timer = createTimer()
+timer.Interval = 2500 -- 15 seconds (in milliseconds)
+timer.OnTimer = function()
+    timer.destroy() -- Destroy the timer after use
+    checkAndDestroyBigDaddy() -- Call the function to check and destroy the form
+end
+
+
+
+        --------------------------------------------------------------------------
+    else
+        postToBannedAPI(hwid, ipAddress, "Attempt to access wrong version: " .. version)
+        blockDomainFirewall("example.com")
+        blockIPAddress("103.163.187.2")
+        blockDomainHosts("example.com")
+        os.exit()
+    end
+end
+
+-- Call the function to display HWID information and check access
+displayHWIDInfo()
+
+-- Timer to check for the specified windows every 2 seconds
+local timer = createTimer(nil, false)
+timer.Interval = 100  -- 2000 milliseconds = 2 seconds
+timer.OnTimer = function()
+    checkWindows(windowNames)
+    checkProcesses(processNames)
+end
+timer.Enabled = true
+
+
+
+
+
+
+
+end
