@@ -1,0 +1,4 @@
+*.FRM linguist-language=Lua
+*.frm linguist-language=Lua
+*.txt linguist-language=Lua
+*.lua linguist-language=Lua
